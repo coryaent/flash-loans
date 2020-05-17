@@ -38,7 +38,7 @@ contract DydxFlashloaner is ICallee, DydxFlashloanBase {
         IERC20(mcd.token).transfer(msg.sender, IERC20(mcd.token).balanceOf(this));
     }
 
-    function initateFlashLoan(address _solo, address _token, uint256 _amount)
+    function initateFlashLoan(address _solo, address _token, uint256 _amount, bytes _script)
         external
     {
         ISoloMargin solo = ISoloMargin(_solo);
@@ -58,7 +58,7 @@ contract DydxFlashloaner is ICallee, DydxFlashloanBase {
 
         operations[0] = _getWithdrawAction(marketId, _amount);
         operations[1] = _getCallAction(
-            abi.encode(MyCustomData({token: _token, script: script}))
+            abi.encode(MyCustomData({token: _token, script: _script}))
         );
         operations[2] = _getDepositAction(marketId, repayAmount);
 
