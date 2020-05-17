@@ -6,7 +6,6 @@ import "@studydefi/money-legos/aave/contracts/IFlashLoanReceiver.sol";
 import "@studydefi/money-legos/aave/contracts/FlashloanReceiverBase.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract ContractWithFlashLoan is FlashLoanReceiverBase {
     address constant AaveLendingPoolAddressProviderAddress = 0x24a42fD28C976A61Df5D00D0599C34c4f90748c8;
@@ -27,7 +26,12 @@ contract ContractWithFlashLoan is FlashLoanReceiverBase {
         transferFundsBackToPoolInternal(_reserve, _amount.add(_fee));
 
         // withdraw profits
-        ERC20(_reserve).transfer(msg.sender, ERC20(_reserve).balanceOf(this));
+        if (_reserve == '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
+            msg.sender.transfer(this.balance);
+        } else {
+            IERC20(_reserve).transfer(msg.sender, IERC20(_reserve).balanceOf(this));
+        }
+
     }
 
     // Entry point
@@ -71,13 +75,13 @@ contract ContractWithFlashLoan is FlashLoanReceiverBase {
         }
     }
 
-    function uint256At(bytes data, uint256 location) pure internal returns (uint256 result) {
+    function uint256At(bytes data, uint256 location) internal pure returns (uint256 result) {
         assembly {
             result := mload(add(data, add(0x20, location)))
         }
     }
 
-    function addressAt(bytes data, uint256 location) pure internal returns (address result) {
+    function addressAt(bytes data, uint256 location) internal pure returns (address result) {
         uint256 word = uint256At(data, location);
         assembly {
             result := div(and(word, 0xffffffffffffffffffffffffffffffffffffffff000000000000000000000000),
@@ -85,7 +89,7 @@ contract ContractWithFlashLoan is FlashLoanReceiverBase {
         }
     }
 
-    function locationOf(bytes data, uint256 location) pure internal returns (uint256 result) {
+    function locationOf(bytes data, uint256 location) internal pure returns (uint256 result) {
         assembly {
             result := add(data, add(0x20, location))
         }
