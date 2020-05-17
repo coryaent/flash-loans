@@ -6,14 +6,10 @@ import "@studydefi/money-legos/aave/contracts/IFlashLoanReceiver.sol";
 import "@studydefi/money-legos/aave/contracts/FlashloanReceiverBase.sol";
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract ContractWithFlashLoan is FlashLoanReceiverBase {
     address constant AaveLendingPoolAddressProviderAddress = 0x24a42fD28C976A61Df5D00D0599C34c4f90748c8;
-
-    struct MyCustomData {
-        address a;
-        uint b;
-    }
 
     function executeOperation(
         address _reserve,
@@ -22,17 +18,16 @@ contract ContractWithFlashLoan is FlashLoanReceiverBase {
         bytes calldata _params
     ) external {
         // You can pass in some byte-encoded params
-        MyCustomData memory myCustomData = abi.decode(_params, (MyCustomData));
-        // myCustomData.a
+        memory script = _params;
 
-        // Function is called when loan is given to contract
-        // Do your logic here, e.g. arbitrage, liquidate compound, etc
-        // Note that if you don't do your logic, it WILL fail
+        // sequentially call contacts, abort on failed calls (TxManager)
+        invokeContracts(script);
 
-        // TODO: Change line below
-        revert("Hello, you haven't implemented your flashloan logic");
-
+        // repay flash loan
         transferFundsBackToPoolInternal(_reserve, _amount.add(_fee));
+
+        // withdraw profits
+        ERC20(_reserve).transfer(msg.sender, ERC20(_reserve).balanceOf(this));
     }
 
     // Entry point
@@ -56,5 +51,43 @@ contract ContractWithFlashLoan is FlashLoanReceiverBase {
             amountToLoan,
             _params
         );
+    }
+
+    // from MakerDAO's TxManager
+    function invokeContracts(bytes script) internal {
+        uint256 location = 0;
+        while (location < script.length) {
+            address contractAddress = addressAt(script, location);
+            uint256 calldataLength = uint256At(script, location + 0x14);
+            uint256 calldataStart = locationOf(script, location + 0x14 + 0x20);
+            assembly {
+                switch call(sub(gas, 5000), contractAddress, 0, calldataStart, calldataLength, 0, 0)
+                case 0 {
+                    revert(0, 0)
+                }
+            }
+
+            location += (0x14 + 0x20 + calldataLength);
+        }
+    }
+
+    function uint256At(bytes data, uint256 location) pure internal returns (uint256 result) {
+        assembly {
+            result := mload(add(data, add(0x20, location)))
+        }
+    }
+
+    function addressAt(bytes data, uint256 location) pure internal returns (address result) {
+        uint256 word = uint256At(data, location);
+        assembly {
+            result := div(and(word, 0xffffffffffffffffffffffffffffffffffffffff000000000000000000000000),
+                          0x1000000000000000000000000)
+        }
+    }
+
+    function locationOf(bytes data, uint256 location) pure internal returns (uint256 result) {
+        assembly {
+            result := add(data, add(0x20, location))
+        }
     }
 }
